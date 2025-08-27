@@ -1,0 +1,203 @@
+-- FLZ One-Tap Throw+Pull EaseIn (classic, styled)
+-- X / Button: wait 0.2 -> Throw to 50 -> auto Pull to 5
+-- Theme: light pink, white, black + animated flowers + draggable + "Made By Flazed"
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+
+-- ========= Colors =========
+local COLOR_BLACK     = Color3.fromRGB(10, 10, 10)
+local COLOR_WHITE     = Color3.fromRGB(255, 255, 255)
+local COLOR_LIGHTPINK = Color3.fromRGB(255, 182, 193)
+
+-- ========= GUI =========
+local gui = Instance.new("ScreenGui")
+gui.Name = "EaseInGUI"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame")
+frame.Name = "Main"
+frame.Size = UDim2.new(0, 220, 0, 110)
+frame.Position = UDim2.new(0, 30, 0, 150)
+frame.BackgroundColor3 = COLOR_BLACK
+frame.BorderSizePixel = 0
+frame.Parent = gui
+
+-- pretty
+local corner = Instance.new("UICorner", frame)
+corner.CornerRadius = UDim.new(0, 12)
+local stroke = Instance.new("UIStroke", frame)
+stroke.Thickness = 2
+stroke.Color = COLOR_LIGHTPINK
+stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+-- Title
+local title = Instance.new("TextLabel")
+title.Name = "Title"
+title.Parent = frame
+title.BackgroundTransparency = 1
+title.Size = UDim2.new(1, -16, 0, 28)
+title.Position = UDim2.new(0, 8, 0, 8)
+title.Text = "Made By Flazed"
+title.TextColor3 = COLOR_WHITE
+title.Font = Enum.Font.FredokaOne
+title.TextScaled = true
+
+-- Button
+local easeBtn = Instance.new("TextButton")
+easeBtn.Name = "EaseButton"
+easeBtn.Parent = frame
+easeBtn.Size = UDim2.new(1, -16, 0, 54)
+easeBtn.Position = UDim2.new(0, 8, 0, 44)
+easeBtn.BackgroundColor3 = COLOR_LIGHTPINK
+easeBtn.TextColor3 = COLOR_WHITE
+easeBtn.BorderSizePixel = 0
+easeBtn.Text = "EaseIn: OFF"
+easeBtn.Font = Enum.Font.FredokaOne
+easeBtn.TextScaled = true
+Instance.new("UICorner", easeBtn).CornerRadius = UDim.new(0, 10)
+
+-- subtle inner stroke
+local btnStroke = Instance.new("UIStroke", easeBtn)
+btnStroke.Thickness = 1.5
+btnStroke.Color = COLOR_WHITE
+btnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+btnStroke.LineJoinMode = Enum.LineJoinMode.Round
+
+-- ========= Draggable =========
+do
+    local dragging, dragStart, startPos
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    UIS.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+
+-- ========= Animated Flowers (🌸) =========
+local flowersLayer = Instance.new("Frame")
+flowersLayer.Name = "Flowers"
+flowersLayer.Parent = frame
+flowersLayer.BackgroundTransparency = 1
+flowersLayer.Size = UDim2.new(1, 0, 1, 0)
+
+local function spawnFlower(yOffset, speedSec, sizePx, startDelay)
+    local lbl = Instance.new("TextLabel")
+    lbl.BackgroundTransparency = 1
+    lbl.Text = "🌸"
+    lbl.Font = Enum.Font.FredokaOne
+    lbl.TextScaled = true
+    lbl.TextColor3 = COLOR_LIGHTPINK
+    lbl.Size = UDim2.fromOffset(sizePx, sizePx)
+    lbl.Position = UDim2.new(0, -sizePx, 0, yOffset)
+    lbl.Parent = flowersLayer
+
+    local corner = Instance.new("UICorner", lbl)
+    corner.CornerRadius = UDim.new(1,0)
+
+    task.delay(startDelay or 0, function()
+        while lbl.Parent do
+            lbl.Position = UDim2.new(0, -sizePx, 0, yOffset)
+            local tween = TweenService:Create(lbl, TweenInfo.new(speedSec, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Position = UDim2.new(1, sizePx, 0, yOffset)})
+            tween:Play()
+            tween.Completed:Wait()
+            task.wait(0.3)
+        end
+    end)
+end
+
+-- a few gentle floaters
+spawnFlower(12, 4.5, 18, 0.1)
+spawnFlower(32, 5.2, 14, 0.6)
+spawnFlower(58, 4.8, 16, 1.0)
+spawnFlower(84, 5.5, 12, 1.4)
+
+-- ========= Ease-In Logic (classic) =========
+local isRunning = false
+local pulling = false
+local speed = 50      -- pull speed
+local MIN_LEN = 5
+local THROW_TO = 50
+local DELAY = 0.2
+
+local function getRope()
+    local ropes = workspace:FindFirstChild("Ropes")
+    if not ropes then return nil end
+    local bucket = ropes:FindFirstChild(player.Name)
+    if not bucket then return nil end
+    for _, r in ipairs(bucket:GetDescendants()) do
+        if r:IsA("RopeConstraint") then
+            return r
+        end
+    end
+    return nil
+end
+
+local function runCycle()
+    local rope = getRope()
+    if not rope or isRunning then return end
+    isRunning = true
+    pulling = false
+    easeBtn.Text = "Waiting..."
+
+    task.delay(DELAY, function()
+        rope = getRope()
+        if not rope or not rope.Parent then
+            isRunning = false
+            easeBtn.Text = "EaseIn: OFF"
+            return
+        end
+
+        -- Throw to 50
+        rope.Length = THROW_TO
+        easeBtn.Text = "Throwing..."
+
+        -- Start pulling back
+        pulling = true
+        easeBtn.Text = "Pulling..."
+    end)
+end
+
+easeBtn.MouseButton1Click:Connect(runCycle)
+UIS.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.X then
+        runCycle()
+    end
+end)
+
+RunService.RenderStepped:Connect(function(dt)
+    if pulling then
+        local rope = getRope()
+        if rope then
+            rope.Length = math.max(rope.Length - speed * dt, MIN_LEN)
+            if rope.Length <= MIN_LEN then
+                pulling = false
+                isRunning = false
+                easeBtn.Text = "EaseIn: OFF"
+            end
+        else
+            pulling = false
+            isRunning = false
+            easeBtn.Text = "EaseIn: OFF"
+        end
+    end
+end)
